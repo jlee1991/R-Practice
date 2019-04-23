@@ -1,0 +1,204 @@
+---
+title: "Team 6 OK Cupid Case Study"
+author: "Lee, Jim"
+date: "2019-02-11"
+output: html_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# just to clear the environment
+rm(list=ls())
+```
+
+```{r Instructions, include=FALSE}
+
+## Instructions
+# (0) Complete your R programming in a .R file.
+# (1) Fill in the information for title, author, and date at the top of this file.
+# (2) Copy & paste your entire, error-free R code below.
+# (3) Click the "Knit" button shown above.  This will generate a .HTML file.
+# (4) Submit both .HTML and .Rmd files to Canvas.
+
+## Note
+# Other than (1) and (2), please do NOT make any changes on this .Rmd file.
+
+```
+
+### Solutions
+
+```{r Solutions}
+
+### Start: your R code ###
+
+#Set the working directory
+setwd('/cloud/project/cases/Ok Cupid')
+
+#Install OK Cupid Packages
+install.packages('okcupiddata')
+data('profiles')
+
+#Libraries
+library(okcupiddata)
+library(dplyr)
+library(maps)
+library(ggplot2)
+library(ggthemes)
+
+#EXAMINE THE DATA
+#Import Address, Location and Census
+Address <-read.csv('addr.csv')
+Location <-read.csv('LatLon.csv')
+Census <-read.csv('sharedCensus2010Vars.csv')
+
+#Sex is completely filled out for each data point so we can reliably use this info
+sum(is.na(profiles$sex))
+
+#Seperate Male and Female Profiles
+male_profiles <- profiles %>% filter(profiles$sex == 'm')
+female_profiles <- profiles %>% filter(profiles$sex == 'f')
+
+#Calculate the Gender Disparity
+count(female_profiles) #24,117 ~ 60% of users
+count(male_profiles) #35,829 ~ 40% of users
+
+#OBSERVATION 1
+#There are much more male users compared to female users with a 60/40 split
+#The US Population average is a 51/49 split, so these demographics are FAR different
+#California has a higher female than male population in general, but it is closer to 50/50 (54/46 in SF)
+
+#CLEAN AND ENRICH THE DATA
+#Remove all inactive (defined by users who have not used their account from one year of the most recent date)
+
+sum(is.na(profiles$last_online)) #All users have a last_online date
+max(profiles$last_online) #Most recent active date
+
+active_profiles <- profiles[(profiles$last_online> "2011-07-01" & profiles$last_online < "2012-07-01"),] #52,500 users remain (~6,500 users removed)
+
+sum(is.na(active_profiles$location)) #location is filled in for all users - so this is a prime candidate for joins
+
+#Census has too much data, only bring in select columns
+Revised_Census <- Census %>%
+  select(location, postalCode, city, county, state, 13:20) 
+
+#Add in supplemental data
+enriched_active_profiles <- left_join(active_profiles, Location, by ='location')
+enriched_active_profiles <- left_join(enriched_active_profiles, Revised_Census, by = 'location')
+
+#Map of all users in California - most users in this dataset seem to come from here
+map('state', region = c('california'))
+points(enriched_active_profiles$lon,enriched_active_profiles$lat, col='blue')
+
+#Population Map of the Bay Area
+counties <- map_data('county')
+california  <- counties[counties$subregion %in% c("san mateo", "alameda", "san francisco", "marin", "san mateo", "santa clara", "santa clara","sonoma", "napa", "solano", "contra costa") ,]
+california_profiles <- enriched_active_profiles %>% filter(enriched_active_profiles$county %in% c("San Mateo County", "Alameda County", "San Francisco County", "Marin County", "San Mateo County", "Santa Clara County","Sonoma County", "Napa County", "Solano County", "Contra Costa County"))
+
+ggplot(data = california_profiles, mapping = aes(x = lon, y = lat, group = city)) + 
+  geom_polygon(color = "white", fill = "lightgrey") + 
+  geom_polygon(data = california, aes(x=long, y=lat, group=subregion), fill= NA, color='black') + 
+  geom_point(data = california_profiles, aes(x=lon, y=lat, group=1), color='red', alpha=0.15) +
+  theme_gdocs()
+
+#Male Population Map of the Bay Area
+california_male_profiles <- enriched_active_profiles %>% 
+  filter(
+    enriched_active_profiles$sex == "m" &
+    enriched_active_profiles$county %in% c("San Mateo County", "Alameda County", "San Francisco County", "Marin County", "San Mateo County", "Santa Clara County","Sonoma County", "Napa County", "Solano County", "Contra Costa County")
+    )
+
+ggplot(data = california_male_profiles, mapping = aes(x = lon, y = lat, group = city)) + 
+  geom_polygon(color = "white", fill = "lightgrey") + 
+  geom_polygon(data = california, aes(x=long, y=lat, group=subregion), fill= NA, color='black') + 
+  geom_point(data = california_male_profiles, aes(x=lon, y=lat, group=1), color='blue', alpha=0.15) +
+  theme_gdocs()
+
+#Female Population Map of the Bay Area
+california_female_profiles <- enriched_active_profiles %>% 
+  filter(
+    enriched_active_profiles$sex == "f" &
+      enriched_active_profiles$county %in% c("San Mateo County", "Alameda County", "San Francisco County", "Marin County", "San Mateo County", "Santa Clara County","Sonoma County", "Napa County", "Solano County", "Contra Costa County")
+  )
+
+ggplot(data = california_female_profiles, mapping = aes(x = lon, y = lat, group = city)) + 
+  geom_polygon(color = "white", fill = "lightgrey") + 
+  geom_polygon(data = california, aes(x=long, y=lat, group=subregion), fill= NA, color='black') + 
+  geom_point(data = california_female_profiles, aes(x=lon, y=lat, group=1), color='pink', alpha=0.15) +
+  theme_gdocs()
+
+#Determine the largest locations of users in California
+d <- enriched_active_profiles 
+d$counter <- paste(1) #Add a numeric column to count
+d[, 37] <- as.numeric(as.character( d[, 37] )) #convert column char -> numeric
+
+#Find the top SEVEN highest user bases by county
+f <- aggregate(d[, 37], list(d$county), sum)
+f <- f[order(f$x,decreasing=TRUE),]
+head(f,7) 
+
+#Find the top SIX highest user bases by city
+e <- aggregate(d[, 37], list(d$location), sum)
+e <- e[order(e$x,decreasing=TRUE),]
+head(e) 
+
+#Custom function that was to be used with sum in the aggregate... not working for my intended purposes, so I calculated the below segment
+#myfunc <- function(vec){
+#  count(d %>% filter(d$sex == 'f' & d$location == vec))/count(d %>% filter(d$location == vec))
+#}
+
+#View of gender ratios by COUNTY of the highest user bases
+count(d %>% filter(d$sex == 'f' & d$county == "San Francisco County"))/count(d %>% filter(d$county == "San Francisco County"))
+count(d %>% filter(d$sex == 'f' & d$county == "Alameda County"))/count(d %>% filter(d$county == "Alameda County"))
+count(d %>% filter(d$sex == 'f' & d$county == "San Mateo County"))/count(d %>% filter(d$county == "San Mateo County"))
+count(d %>% filter(d$sex == 'f' & d$county == "Contra Costa County"))/count(d %>% filter(d$county == "Contra Costa County"))
+count(d %>% filter(d$sex == 'f' & d$county == "Marin County"))/count(d %>% filter(d$county == "Marin County"))
+count(d %>% filter(d$sex == 'f' & d$county == "Solano County"))/count(d %>% filter(d$county == "Solano County"))
+count(d %>% filter(d$sex == 'f' & d$county == "Santa Clara County"))/count(d %>% filter(d$county == "Santa Clara County"))
+
+#View of gender ratios by CITY of the highest user bases
+count(d %>% filter(d$sex == 'f' & d$location == "san francisco, california"))/count(d %>% filter(d$location == "san francisco, california"))
+count(d %>% filter(d$sex == 'f' & d$location == "oakland, california"))/count(d %>% filter(d$location == "oakland, california"))
+count(d %>% filter(d$sex == 'f' & d$location == "berkeley, california"))/count(d %>% filter(d$location == "berkeley, california"))
+count(d %>% filter(d$sex == 'f' & d$location == "san mateo, california"))/count(d %>% filter(d$location == "san mateo, california"))
+count(d %>% filter(d$sex == 'f' & d$location == "palo alto, california"))/count(d %>% filter(d$location == "palo alto, california"))
+count(d %>% filter(d$sex == 'f' & d$location == "alameda, california"))/count(d %>% filter(d$location == "alameda, california"))
+
+#OBSERVATION 2
+#Users are predominantly located in the Bay Area but the gender disparity varies by city
+#Compared to the national average, San Francisco ranks below: 39.6% are female users from the highest user population of 27208
+#Despite being close in vicinity, Oakland is nearly on par: 48.5% are female users from the second highest user population of 6278.
+#Berkeley (also close to SF) has a slightly better ratio (42.0%) with 3711 users
+
+#All ages are filled in so we can take a look a this to determine potential differences
+sum(is.na(enriched_active_profiles$age))
+
+sf_female_profiles <- d %>% filter(d$sex == 'f' & d$location == "san francisco, california")
+oak_female_profiles <- d %>% filter(d$sex == 'f' & d$location == "oakland, california")
+
+ggplot(data= sf_female_profiles) + 
+  geom_histogram(aes(x=age), binwidth=1)
+summary(sf_female_profiles$age)
+
+ggplot(data= oak_female_profiles) + 
+  geom_histogram(aes(x=age), binwidth=1)
+summary(oak_female_profiles$age) 
+
+#OBSERVATION 3
+#The average female user is on average two years older from Oakland vs SF
+#Potentially, a marketing campaign focused on raising the user base of older women in San Francisco could be a good place to start
+
+#Below are potentially a few more insightful columns (some of which require further cleaning) that could from a strategy for marketing 
+#(e.g. drink/open bar events for women based on "drinks" responses)
+sum(is.na(enriched_active_profiles$speaks)) #46 - categorical
+sum(is.na(enriched_active_profiles$status)) #0
+sum(is.na(enriched_active_profiles$religion)) #17,776 - categorical
+sum(is.na(enriched_active_profiles$offspring)) #32,001 - categorical
+sum(is.na(enriched_active_profiles$drinks)) #2,652 - categorical
+sum(is.na(enriched_active_profiles$body_type)) #4,725 - categorical
+sum(is.na(enriched_active_profiles$body_diet)) #0
+sum(is.na(enriched_active_profiles$P0030001_Total_population)) #1882 - numerical
+
+### End: your R code ###
+
+```

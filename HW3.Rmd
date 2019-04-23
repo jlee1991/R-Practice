@@ -1,0 +1,254 @@
+---
+title: "Homework 3"
+author: "Lee, Jim"
+date: "2019-02-27"
+output: html_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# just to clear the environment
+rm(list=ls())
+```
+
+```{r Instructions, include=FALSE}
+
+## Instructions
+# (0) Complete your R programming in a .R file.
+# (1) Fill in the information for title, author, and date at the top of this file.
+# (2) Copy & paste your entire, error-free R code below.
+# (3) Click the "Knit" button shown above.  This will generate a .HTML file.
+# (4) Submit both .HTML and .Rmd files to Canvas.
+
+## Note
+# Other than (1) and (2), please do NOT make any changes on this .Rmd file.
+
+```
+
+### Solutions
+
+```{r Solutions}
+
+### Start: your R code ###
+
+# Setwd
+setwd("/cloud/project/bookDatasets")
+
+#########################################
+##C6.1 Predicting Boston Housing Prices##
+##Only do (a), (b), & (c) ###############
+#########################################
+
+housing <- read.csv('BostonHousing.csv')
+
+########
+##6.1A##
+########
+
+#Definitions:
+#Training Partition: Largest partition that contains the data used to build the various models (generally multiple)
+#Validation Partition: Used to assess the predictive performance of each model so that you can compare models and chose the best one
+#Test Partition: Used to assess the performance of the chosen model with new data
+
+#Question: Why should the data be partitioned into training and validation sets? 
+#Answer: The overall dataset should be be partitioned to determine a best fit model by using smaller breakdowns of the overall dataset for purposes of testing.
+#Technically speaking, if mixed correctly each partition will demonstrate similar patterns and by creating a model on the training dataset, the validation dataset should also follow the model.
+#The training should be larger than the validation partition.
+
+#Question: What will the training set be used for? 
+#Answer: The training partition as described above is the largest of the partitions and is used to initially build the models (in which there may be several)
+
+#Question: What will the validation set be used for?
+#Answer: The validation partition will evaluate the models with a smaller portion of the original dataset
+
+########
+##6.1B##
+########
+
+#Fit a multiple linear regression model to the median house (MEDV) as a function of CRIM, CHAS, and RM.
+#Write the equation for predicting the median house price from the predictors in the model.
+
+# Libs
+suppressMessages(library(vtreat))
+suppressMessages(library(dplyr))
+suppressMessages(library(ModelMetrics))
+
+#Split and partition data
+splitPercent <- round(nrow(housing) %*% .9)
+
+set.seed(1234)
+idx      <- sample(1:nrow(housing), splitPercent)
+trainSet <- housing[idx, ]
+testSet  <- housing[-idx, ]
+
+(informativeFeatureNames <- names(housing)[1:12])
+(outcomeVariableName     <- names(housing)[13])
+  
+dataPlan <- designTreatmentsN(housing, 
+                              informativeFeatureNames, 
+                              outcomeVariableName)
+  
+treatedTrain <- prepare(dataPlan, trainSet)
+
+#Build the model
+#MEDV: Median Value of of owner occupied homes in the $1000s
+#CRIM: Per capita crime rate by town 
+#CHAS: Charles River dummy variable (=1 if tract bounds river; =0 otherwise)
+#RM: Average number of rooms per dwelling
+fit <- lm(MEDV ~ CRIM + CHAS + RM ,
+          data = treatedTrain)
+
+summary(fit)
+
+#Model is MEDV = -27.25567 + -0.27582*CRIM + 3.78511*CHAS + 8.04188*RM
+
+########
+##6.1C##
+########
+
+#Using the estimated regression model, what median house price is predicted for a tract in the Boston area that does not bound the Charles River, 
+#has a crime rate of 0.1, and where the number of rooms per house is 6? What is the prediction error?
+
+MEDV_Estimate = 
+  -27.25567 + #Constant
+ -0.27582*0.1 + #CRIM
+ 3.78511*0 + #CHAS
+ 8.04188*6 #RM
+ 
+MEDV_Estimate #$20,968
+
+#Prediction error is not possible to obtain as there is no given actual value.
+
+################################
+##C10.3 Sales of Riding Mowers##
+##Only do (a), (b), (c), & (d)##
+################################
+
+mowers <- read.csv('RidingMowers.csv')
+
+#########
+##10.3A##
+#########
+
+#Question: What percentage of households in the study were owners of a riding mower?
+
+prop.table(table(mowers$Ownership))
+
+#Answer: The households in the dataset are split 50/50 in terms of ownership of mowers so 12 were owners of a mower
+
+#########
+##10.3B##
+#########
+
+#Libs
+suppressMessages(library(ggplot2))
+suppressMessages(library(ggthemes))
+
+#Create a scatter plot of Income vs. Lot Size using color or symbol to distinguish owners from nonowners.
+#Question: From the scatter plot, which class seems to have a higher average income, owners or nonowners?
+
+ggplot(mowers, aes(x=Income, y=Lot_Size, color=Ownership)) + 
+  geom_point(size=2) +
+  theme_economist_white() +
+  theme(legend.position = "bottom")
+
+#Answer: Just on observation, the owners seem to have a higher average income compared to non-owners
+
+#########
+##10.3C##
+#########
+
+#Question: Among nonowners, what is the percentage of households classified correctly?
+
+# Libs
+suppressMessages(library(vtreat))
+suppressMessages(library(MLmetrics))
+suppressMessages(library(pROC))
+suppressMessages(library(dplyr))
+
+#Translate Owner to a Quantitative Value (Owner = 1 and Non-Owner = 0)
+mowers$Ownership <- 1* (mowers$Ownership == "Owner")
+
+# Idenfity the informative and target
+names(mowers)
+targetVar       <- names(mowers)[3]
+informativeVars <- names(mowers)[1:2]
+
+# Design a "C"ategorical variable plan 
+plan <- designTreatmentsC(mowers, 
+                          informativeVars,
+                          targetVar, 1)
+
+# Apply to xVars
+treatedX <- prepare(plan, mowers)
+
+# Fit a logistic regression model
+fit <- glm(Ownership ~., data = treatedX, family ='binomial')
+summary(fit)
+
+# Get predictions
+ownerPreds <- predict(fit, type='response')
+
+# Classify 
+cutoff      <- 0.5
+mowerOwner <- ifelse(ownerPreds >= cutoff, 1,0)
+
+# Organize w/Actual
+results <- data.frame(actual = mowers$Ownership,
+                      classes = mowerOwner)
+
+# Get a confusion matrix
+(confMat <- ConfusionMatrix(results$classes, results$actual))
+
+#Answer: Given a 0.5 cutoff, 10/12 predictions were correctly predicted for a non-owner (83.33% accuracy)
+
+#########
+##10.3D##
+#########
+
+#Question: To increase the percentage of correctly classified nonowners, should the cutoff probability be increased or decreased?
+
+# Visually how well did we separate our classes?
+ggplot(results, aes(x=ownerPreds, color=as.factor(actual))) +
+  geom_density() + 
+  geom_vline(aes(xintercept = cutoff), color = 'green')
+
+# Create a new cutoff value (0.5 -> 0.6)
+cutoff      <- 0.6
+mowerOwner <- ifelse(ownerPreds >= cutoff, 1,0)
+
+# Organize w/Actual
+results <- data.frame(actual = mowers$Ownership,
+                      classes = mowerOwner)
+
+#Filter out to ONLY include Non-Owner Mowers
+#results <- results %>% filter(results$actual == 0)
+#results
+
+# Get a confusion matrix
+(confMat <- ConfusionMatrix(results$classes, results$actual))
+
+#Answer: The accuracy for the cutoff (for non-owners ONLY) increases and decreases proportional to the cutoff 
+#The cutoff point where the percentage of correctly classified non-owners increases is around 0.6 when the accuracy increases to 11/12 predictions correct (91.67%). The graph created also agrees with this observation.
+
+################
+##Extra Credit##
+################
+
+#Which group's presentation are you reviewing?
+#I will be reviewing Group 8’s presentation (and watched both Group 7 and 8)
+
+#What are the strengths of the presentation?
+#Their approach was similar to my own from my presentation to analyze populations based on location
+#They did a great job looking at various perspectives of a very niche market (Oakland) from age, sexual orientation and drinking preference
+#I learned a lot more into those perspectives that I just didn’t have the time to analyze.
+
+#What are the weaknesses of the presentation?
+#Based on presentation, there is too much formatting to the powerpoint slides that draw attention away from the point. 
+#Also, the data analysis portion could be better explained - what was omitted or cleaned up? 
+#To get more realistic results, it would be best to remove inactive users (on my analysis I defined it as having not used the platform within the last year).
+
+### End: your R code ###
+
+```

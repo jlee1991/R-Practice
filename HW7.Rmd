@@ -1,0 +1,107 @@
+---
+title: "Homework 7"
+author: "Lee, Jim"
+date: "2019-04-03"
+output: html_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# just to clear the environment
+rm(list=ls())
+```
+
+```{r Instructions, include=FALSE}
+
+## Instructions
+# (0) Complete your R programming in a .R file.
+# (1) Fill in the information for title, author, and date at the top of this file.
+# (2) Copy & paste your entire, error-free R code below.
+# (3) Click the "Knit" button shown above.  This will generate a .HTML file.
+# (4) Submit both .HTML and .Rmd files to Canvas.
+
+## Note
+# Other than (1) and (2), please do NOT make any changes on this .Rmd file.
+
+```
+
+### Solutions
+
+```{r Solutions}
+
+### Start: your R code ###
+
+#Libraries
+suppressMessages(library(forecast))
+suppressMessages(library(lubridate))
+suppressMessages(library(ggplot2))
+suppressMessages(library(MLmetrics))
+
+#C18.9
+
+## Set the working directory
+setwd("/cloud/project/bookDatasets")
+options(scipen=999)
+
+# Data
+wines <- read.csv("AustralianWines.csv")
+head(wines)
+
+#a) Which forecasting method would you choose if you had to choose the same method for all series? Why?
+
+#Given the data has seasonality and there seems to be a trend in several of the wine sales (from observation of Figure 18.12), my inclination to choose a forecasting technique would be utilizing the Holt Winters model. 
+
+#According to the book, we know that Holt Winters Exponential Smoothing is able to use forecasting while taking into account for seasonality, level and trend to create an adaptable model. This can create a more fitted model for forecasting that may be superior to other techniques like a Naive model that will miss the spikes in a system. Given that Holt Winter is good for adjusting for oscillating trends, I think it makes the most sense for the graphs I see on 18.12.
+
+#b) Fortified wine has the largest market share of the above six types of wine.  You are asked to focus on fortified wine sales alone, and produce as accurate as possible forecasts for the next 2 months.
+
+#Create a time series and apply Holt Winter model
+fwinesTS <- ts(wines$Fortified, start = c(1980,1), end = c(1994,12), frequency = 12)
+fwinesHW <- HoltWinters(fwinesTS, seasonal = "mult") 
+plot(fwinesHW)
+
+# Start by partitioning the data using the period until December 1993 as the training set.
+fwinesTrain <- wines[0:168,]
+fwinesValidation <- wines[169:180,]  
+
+# Create a Time Series of the Training and Validation sets
+fwinesTrainTS <- ts(wines$Fortified, start = c(1980,1), end = c(1993,12), frequency = 12)
+fwinesValidationTS <- ts(wines$Fortified, start = c(1994,1), end = c(1994,12), frequency = 12)
+
+# Apply Holt-Winter's exponential smoothing to sales with an appropriate season length (use the default values for the smoothing constants).
+fwinesHW <- HoltWinters(fwinesTrainTS, seasonal = 'mult')
+validForecasts <- predict(fwinesHW, 14)
+validForecasts[13] #January 1995
+validForecasts[14] #February 1995
+
+#Combine and graph
+fwinesValidationCombined <- c(fwinesTrain$Fortified, fwinesValidation$Fortified, validForecasts)
+validationDF <- data.frame(idx = 1:length(fwinesValidationCombined),
+                            original = fwinesValidationCombined)
+
+# Examine visual fit of the trend
+ggplot(validationDF) +
+  geom_line(aes(x=idx, y=original)) + theme_bw()
+
+# Get RMSE and MAPE
+#Compare to the first 12 data points forecasted with the validation set!
+RMSE(fwinesValidation$Fortified, validForecasts[1:12,])
+MAPE(fwinesValidation$Fortified, validForecasts[1:12,])
+
+#Extra Credit:
+# (1) Group name: Group F
+# (2) Last names of your group members (including you): Frick, Lee, Nayyar, Rivera
+# (3) Last name of the member who will take care of collecting and submitting Case 2 study materials later: Frick
+# (4) Case 2 study deadline: 5/10
+
+# Question:
+# "Before" working on an Rmd and its HTML files,
+# have you double checked that your R code is error free
+# by executing Ctrl+Alt+R or Cmd+Alt+R in this R script?
+#
+# Answer (Yes or No): Yes
+
+### End: your R code ###
+
+```

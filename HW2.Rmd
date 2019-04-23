@@ -1,0 +1,167 @@
+---
+title: "Homework 2"
+author: "Lee, Jim"
+date: "2019-02-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# just to clear the environment
+rm(list=ls())
+```
+
+```{r Instructions, include=FALSE}
+
+## Instructions
+# (0) Complete your R programming in a .R file.
+# (1) Fill in the information for title, author, and date at the top of this file.
+# (2) Copy & paste your entire, error-free R code below.
+# (3) Click the "Knit" button shown above.  This will generate a .HTML file.
+# (4) Submit both .HTML and .Rmd files to Canvas.
+
+## Note
+# Other than (1) and (2), please do NOT make any changes on this .Rmd file.
+
+```
+
+### Solutions
+
+```{r Solutions}
+
+### Start: your R code ###
+
+#' Author: Ted Kwartler
+#' Data: 2-6-2019
+#' Student: Jim Lee
+#' Assignment: Day2 EDA, Functions, visuals & mapping
+#' Instructions: Complete the scaffolded code and use the Rmd file to knit a report for Canvas.
+ 
+## Set the working directory (HINT: it should be your wk2_homework folder)
+setwd('/cloud/project/lessons/2_Feb6_Intro2R/wk2_homework')
+
+## Load the libraries, maps ggplot, ggthemes
+library(maps)
+library(ggplot2)
+library(ggthemes)
+
+## Exercises
+# 1. Read in diamonds.csv data and call it 'df'
+df <-read.csv('diamonds.csv')
+
+# 2. Examine the first 10 rows of data
+head(df, n=10)
+
+# 3. What is the first value for the 'color' column when looking at head()? 
+# Answer: E
+
+# 4. Create a new data frame called 'diamonds' by sorting the 'df' object by price and decreasing is FALSE
+diamonds <- df[order(df$price, decreasing=FALSE),]
+
+# 5. Examine the last 6 rows by calling 'tail()' on the 'diamonds' data frame.  What is the most expensive diamond in the set?
+tail(diamonds)
+# Answer: 18823
+
+# 6. Copy and paste the results of the 'summary()' stats for the 'caret' attribute below.  You can use either $ or the index to get the vector
+summary(df$carat)
+#   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#0.2000  0.4000  0.7000  0.7979  1.0400  5.0100 
+
+# Introducing additional functions to try out, don't worry these are straight forward:
+?max
+?min
+?range
+
+# 7. What is the maximum value for the "depth" attribute?
+# Answer: 79
+max(df$depth)
+
+# 8. What is the minimum value for the "table" attribute?
+# Answer: 43
+min(df$table)
+
+# 9. What is the range of values for the "price" column?
+# Answer: From 326 to 18823
+range(df$price)
+
+# 10. Find the 347th diamond in the data set using row indexing.  Copy paste the single row below.
+#    carat   cut color clarity depth table price    x    y    z
+#347  0.72 Ideal     F     VS1  61.7    57  2804 5.74 5.77 3.55
+df[347,]
+
+# 11. Create a barplot of the diamonds' cut and name it barplot.jpg
+cuts <- df$cut
+#jpeg("/cloud/project/lessons/2_Feb6_Intro2R/barplot.jpg")
+barplot(table(cuts))
+#dev.off() 
+
+# 12. Create a ggplot scatterplot of points with the following aesthetics:
+# color = clarity
+# x axis = carat
+# y axis = price
+# point size size = 0.25
+# theme = theme_economist_white()
+# legend = none
+
+ggplot(df, aes(x=carat, y=price, color=clarity)) + 
+  geom_point(size=0.25) +
+  theme_economist_white() +
+  theme(legend.position = "none")
+
+# 13. Examine the price distribution by creating a ggplot geom_histogram() instead of a scatter plot layer.  Use the code scaffold below with the following parameters:
+# data = diamonds
+# type = geom_histogram
+# x = price (we are only examining a single attribute here)
+# bin width = 100
+
+ggplot(data= diamonds) + 
+  geom_histogram(aes(x=price), binwidth=100)
+
+#14. What is the class() of the carat vector?  HINT: apply class() as a function to the carat column using $ or index number
+#Answer = "numeric"
+class(df$carat)
+
+#15. What is the class of the color vector?
+#Answer: "factor"
+class(df$color)
+
+#16. Read in the WesternCellTowers.csv cell towers as westTowers
+westTowers <- read.csv('WesternCellTowers.csv')
+
+#17. Using map() create a state map of 'oregon', 'utah', 'nevada', 'california' & add points() with westtowers$lon,westtowers$lat, col='blue'
+map('state', region = c('oregon', 'utah', 'nevada', 'california') )
+points(westTowers$lon,westTowers$lat, col='blue')
+
+#18. Load the county map data called counties (HINT: with map_data)
+counties <- map_data('county')
+
+#19. Load the state data called state 
+allStates <- map_data('state')
+
+#20. Subset counties and allStates into the objects below; add the last states, california & nevada to the search index
+westernCounties <- counties[counties$region %in% c("oregon","utah", "california", "nevada"),]
+westernStates   <- allStates[allStates$region %in% c("oregon","utah", "california", "nevada") ,]
+
+#21. Using the scaffolding below create a ggplot map of the cell phone towers in the 4 western states.  The first layer will be counties, then add states for a black outline and finally add the points of the westTowers
+ggplot(data = westernCounties, mapping = aes(x = long, y = lat, group = region)) + 
+  geom_polygon(color = "white", fill = "lightgrey") + 
+  geom_polygon(data = westernStates, aes(x=long, y=lat, group=region), fill= NA, color='black') + 
+  geom_point(data = westTowers, aes(x=lon, y=lat, group=1), color='red', alpha=0.15) +
+  theme_gdocs()
+
+# Extra Credit 
+#
+# Case I study is worth 15% of final grade.
+#
+# All homework assignments are worth 20% of final grade
+# and a total of 10 homework assignments are planned in this semester,
+# so one weekly homework assignment is worth 2% of final grade.
+#
+# Therefore, Case 1 study is worth 7.5 weekly homework assignments.
+
+# End
+
+### End: your R code ###
+
+```

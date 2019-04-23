@@ -1,0 +1,87 @@
+---
+title: "Homework 9"
+author: "Lee, Jim"
+date: "2019-04-14"
+output: html_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# just to clear the environment
+rm(list=ls())
+```
+
+```{r Instructions, include=FALSE}
+
+## Instructions
+# (0) Complete your R programming in a .R file.
+# (1) Fill in the information for title, author, and date at the top of this file.
+# (2) Copy & paste your entire, error-free R code below.
+# (3) Click the "Knit" button shown above.  This will generate a .HTML file.
+# (4) Submit both .HTML and .Rmd files to Canvas.
+
+## Note
+# Other than (1) and (2), please do NOT make any changes on this .Rmd file.
+
+```
+
+### Solutions
+
+```{r Solutions}
+
+### Start: your R code ###
+
+#HW9, C14.2
+
+# Libs
+suppressMessages(library(arules))
+
+# set wd
+setwd("/cloud/project/bookDatasets")
+
+# Read in file and create a dataframe
+courseTopics <- read.csv("Coursetopics.csv")
+head(courseTopics)
+
+#Create a matrix
+courseMat <- as.matrix(courseTopics)
+
+# Change Obj class; but apriori can accept a DF if discretized
+courseTrans <- as(courseMat, "transactions")
+#inspect(courseTrans)
+
+# Visualize
+itemFrequencyPlot(courseTrans)
+
+# Apriori control parameters
+ctrl <- list(supp= 10/365, 
+             # how many times *minimum* should the rule appear 
+             conf = 0.5, 
+             # for a specific antecedent, at least 50% of the time the specific consequent must be found
+             target = "rules") # return rules
+
+# Apply Apriori
+coursesApr <- apriori(courseTrans, parameter = ctrl) 
+
+# inspect the rules in a useful format and reorder by lift
+coursesApr <- as(coursesApr, 'data.frame')
+coursesApr <- coursesApr[order(coursesApr$lift, decreasing = T),] 
+
+# Examine top ordered lift results (12 Rules Total)
+coursesApr
+
+# Taking a look into the results of this Association Rule analysis, the support levels are (in general) lower as the maximum count of recurring occurences is 14 (support = 3.8%). The top eight observations have a lift value above 2.4 and where a similar course trajectory occured in reverse. 
+
+# If you observe the top four courses, DataMining, Regression and Cat.Data are often taken together which would be my recommendation of bundling courses together. Additionally, the Intro course seems to be  the most frequently taken class and from the rules, there is frequent association with Intro and several other courses. 
+
+# Question:
+# "Before" working on an Rmd and its HTML files,
+# have you double checked that your R code is error free
+# by executing Ctrl+Alt+R or Cmd+Alt+R in this R script?
+#
+# Answer (Yes or No): Yes
+
+### End: your R code ###
+
+```

@@ -1,0 +1,297 @@
+---
+title: "Homework 6"
+author: "Lee, Jim"
+date: "2019-03-23"
+output: html_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# just to clear the environment
+rm(list=ls())
+```
+
+```{r Instructions, include=FALSE}
+
+## Instructions
+# (0) Complete your R programming in a .R file.
+# (1) Fill in the information for title, author, and date at the top of this file.
+# (2) Copy & paste your entire, error-free R code below.
+# (3) Click the "Knit" button shown above.  This will generate a .HTML file.
+# (4) Submit both .HTML and .Rmd files to Canvas.
+
+## Note
+# Other than (1) and (2), please do NOT make any changes on this .Rmd file.
+
+```
+
+### Solutions
+
+```{r Solutions}
+
+### Start: your R code ###
+
+##########################
+##Part 1: Exercise 16.1 ##
+##########################
+
+#Load the data from file Sept11Travel_REVISED.csv into R
+
+#Libraries
+suppressMessages(library(dygraphs))
+suppressMessages(library(forecast))
+suppressMessages(library(lubridate))
+suppressMessages(library(ggseas))
+suppressMessages(library(ggplot2))
+suppressMessages(library(MLmetrics))
+
+## Set the working directory
+setwd("/cloud/project/bookDatasets")
+options(scipen=999)
+
+# Data
+wtc <- read.csv("Sept11Travel_REVISED.csv")
+
+#Part 0
+
+#Using R, display the number of rows and the number of columns
+nrow(wtc)
+ncol(wtc)
+
+#Using R, display several rows of the data along with column names
+head(wtc,10)
+
+#Plot the entire (including both pre- and post-event) time series for Air
+AirTs <- ts(wtc$Air.RPM_000s, start = 1990, frequency = 12)
+dygraph(AirTs, main = "Airline Miles Traveled Time Series") %>% 
+  dyRangeSelector()
+
+#Plot the entire (including both pre- and post-event) time series for Rail
+RailTs <- ts(wtc$Rail_PM, start = 1990, frequency = 12)
+dygraph(RailTs, main = "Rail Miles Traveled Time Series") %>% 
+  dyRangeSelector()
+
+#Plot the entire (including both pre- and post-event) time series for Car
+VMTTs <- ts(wtc$VMT_billions, start = 1990, frequency = 12)
+dygraph(VMTTs, main = "Car Vehicle Miles Traveled Time Series") %>% 
+  dyRangeSelector()
+
+#16.1a: Is the goal of this study descriptive or predictive?
+#The "goal" in this question specifically refers to the verbatim goal stated at the beginning of C16.1.
+#Reasons for your answer must be described.  Please be concise.
+
+#The goal of this study is "to provide a greater understanding of the passenger travel behavior patterns of persons making long distance trips before and after 9/11)". Based on the premise that the researchers' overall goal is to use the pre-9/11 data (given the assumption that the terrorist event did not occur) to create a forecast to compare with the actual Post-9/11 outcomes, this is a descriptive analysis. Even though we are forecasting, because the forecasted future is already known, this wouldn't be a predictive analysis as the main goal of the study is the comparison of the impact of an event.
+
+#16.1b: Plot each of the three pre-event time series (Air, Rail, Car)
+#Make sure that, as parts of your answers, you should newly make plots satisfying what are specifically requested in Part (b).  
+#Note: The plots you made in Part (0) were for EDA, hence cannot be answers to Part (b).
+
+#Pre-Event Time Series: Air
+#Cutoff made in 8/2001 to avoid including any 9/2001 data with the event impact included
+preAirTs<- ts(wtc$Air.RPM_000s, start = c(1990,1), end = c(2001,8), frequency = 12)
+dygraph(preAirTs, main = "Pre 9/11 Airline Miles Traveled Time Series") %>% 
+  dyRangeSelector()
+
+#Pre-Event Time Series: Rail
+#Cutoff made in 8/2001 to avoid including any 9/2001 data with the event impact included
+preRailTs <- ts(wtc$Rail_PM, start = c(1990,1), end = c(2001,8), frequency = 12)
+dygraph(preRailTs, main = "Pre 9/11 Rail Miles Traveled Time Series") %>% 
+  dyRangeSelector()
+
+#Pre-Event Time Series: Car
+#Cutoff made in 8/2001 to avoid including any 9/2001 data with the event impact included
+preVMTTs <- ts(wtc$VMT_billions, start = c(1990,1), end = c(2001,8), frequency = 12)
+dygraph(preVMTTs, main = "Pre 9/11 Car Vehicle Miles Traveled Time Series") %>% 
+  dyRangeSelector()
+
+#16.1b i) What time series components appear from the plot?
+#Visually examine the plots of the raw data (without decomposing the data) and discuss whether you can notice time series components.
+
+#Observing the Pre-Event Plots, both Car and Air Travel were increasing in utilization while Rail Travel seemed to trending downward and stagnating approaching the 2000s. This observation is merely by visualization, but the overall trends (even without applying any adjustment to the data) is fairly clear especially with Air and Car Travel.
+
+#The Rail Travel plot is also quite telling, but there seems to be a slight upward trend approaching the 2000's that could be useful to take a look into.
+
+#16.1b ii) What type of trend appears? Change the scale of the series add trendlines and suppress seasonality to better visualize the trend pattern
+#Here, if you want, you may use some handy techniques like decompose().
+
+#Air Travel Decomposition
+preAirTsDecomp <- decompose(preAirTs)
+
+#Trend vs. Actual
+AirT <- preAirTsDecomp$trend
+preAirGG <- tsdf(preAirTs)
+ggplot(preAirGG) +
+  geom_line(aes(x=x, y=y), colour='black') +
+  geom_line(aes(x=x, y=AirT), colour='blue') +
+  theme_bw() + theme(legend.position="none")
+
+#Remove Seasonality Influence
+AirS <- preAirTsDecomp$seasonal
+noAirSeasons <- preAirTs - AirS
+plot(noAirSeasons)
+
+#From the Air Travel decomposition, my observation is further validated that the trend of Air Travel had been increasing (in a very linear fashion) prior to 9/11. Both the Trend vs Actual and Removal of Seasonality paint a clearer picture of the travel behavior!
+
+#Rail Travel Decomposition
+preRailTsDecomp <- decompose(preRailTs)
+
+#Trend vs. Actual
+RailT <- preRailTsDecomp$trend
+preRailGG <- tsdf(preRailTs)
+ggplot(preRailGG) +
+  geom_line(aes(x=x, y=y), colour='black') +
+  geom_line(aes(x=x, y=RailT), colour='blue') +
+  theme_bw() + theme(legend.position="none")
+
+#Remove Seasonality Influence
+RailS <- preRailTsDecomp$seasonal
+noRailSeasons <- preRailTs - RailS
+plot(noRailSeasons)
+
+#Here, we can see more easily that Rail travel had been at a constant from 1990-1994 from the Trend vs. Actual Graph. Around 1994, there was a drop off until 1996 after of which it remained constant until a slightly upward trend after 2000 prior to 9/11. The removal of seasonality in this particular instance also allows us to see a much sharper drop off in Rail travel at the beginning of 1992 in comparison to similar fluctuations.
+
+#Car Travel Decomposition
+preVMTTsDecomp <- decompose(preVMTTs)
+
+#Trend vs. Actual
+VMTT <- preVMTTsDecomp$trend
+preVMTGG <- tsdf(preVMTTs)
+ggplot(preVMTGG) +
+  geom_line(aes(x=x, y=y), colour='black') +
+  geom_line(aes(x=x, y=VMTT), colour='blue') +
+  theme_bw() + theme(legend.position="none")
+
+#Remove Seasonality Influence
+VMTS <- preVMTTsDecomp$seasonal
+noVMTSeasons <- preVMTTs - VMTS
+plot(noVMTSeasons)
+
+#From the Car Travel decomposition, my observation is similar to that of Air Travel - that it has validated the trends initially observed, which seemed increasing. Similarly, we see a fairly linear trend in both the Trend vs Actual and Removal of Seasonality.
+
+##########################
+##Part 2: Equity Trading##
+##########################
+
+# Function Parameters:
+# tickerSymbol - a stock ticker in quotes; default is Apple as "AAPL"
+# lookBack - an integer greater than 34 (for MACD to work), the number of historical days you want to review; default is 365
+# kpi - a financial indicator inside quotes.  Options include "macd", "sma", "rsi"; default is 'macd'
+# recommendation - a string you enter inside quotes stating based on the indicator whether it says to buy or sell the stock
+
+
+stockChk <- function(tickerSymbol='AAPL', lookBack =365, kpi = 'macd', recommendation = 'NOT ENTERED'){
+  
+  # Libs
+  suppressMessages(require(TTR))
+  suppressMessages(require(quantmod))
+  suppressMessages(require(dygraphs))
+  suppressMessages(require(htmltools))
+  suppressMessages(require(htmlwidgets))
+  
+  # Data & Subset
+  print(paste('looking up your tickerSymbol:',tickerSymbol))
+  x <- getSymbols(tickerSymbol, auto.assign=FALSE)
+  x<- tail(x, lookBack)
+  
+  # Find the closing price column
+  closeIdx <- grep('Close', names(x))
+  
+  # Calc indicators
+  if(kpi == 'macd'){
+    xKPI <- MACD(x[,closeIdx],
+                 nFast = 12, nSlow = 26, nSig = 9, 
+                 maType="SMA", percent = T)
+  }
+  if(kpi == 'rsi'){
+    xKPI <-RSI(x[,closeIdx], maType="SMA", n =14)
+  }
+  if(kpi =='sma'){
+    xKPI <-SMA(x[,closeIdx], 50)
+    yKPI <-SMA(x[,closeIdx], 200)
+  }
+  
+  # Visual Titles
+  closingTitle <- paste('Daily Closing Price of ', tickerSymbol)
+  candleTitle <- paste('Candlestick of ', tickerSymbol)
+  kpiTitle <- paste(kpi, 'for', tickerSymbol, 'says to ',recommendation)
+  
+  # Construct kpi visuals
+  if(kpi=='sma'){
+    smaData <- cbind(x[,closeIdx],xKPI, yKPI) 
+    kpiPlot <- dygraph(smaData, 
+                       group = "Price", height = 200, 
+                       width = "100%", main = kpiTitle) %>%
+      dyRangeSelector()
+  }
+  if(kpi=='rsi'){
+    kpiPlot <- dygraph(xKPI, 
+                       group = "Price", height = 200, 
+                       width = "100%", main = kpiTitle) %>%
+      dyLimit(30, label = 'OverSold') %>%
+      dyLimit(70, label = 'OverBought') %>%
+      dyRangeSelector()
+  }
+  if(kpi=='macd'){
+    kpiPlot <- dygraph(xKPI,
+                       group = "Price", height = 200, 
+                       width = "100%", main = kpiTitle) %>%
+      dySeries('macd',label='MACD') %>%
+      dySeries('signal',label='SIGNAL') %>%
+      dyRangeSelector()
+  }
+  
+  dashboard <- browsable(
+    tagList(
+      dygraph(x[,closeIdx], 
+              group = "Price",height = 200, 
+              width = "100%", main = closingTitle),
+      dygraph(x[,1:4],
+              group = "Price",height = 200, 
+              width = "100%", main = candleTitle) %>%
+        dyCandlestick(),kpiPlot))
+  
+  return(dashboard)
+}
+
+# Examples
+#stockChk()
+#stockChk('goog')
+#stockChk('amzn', lookBack = 34)
+#stockChk('CMG', kpi = 'rsi', lookBack = 365)
+#stockChk('CMG', kpi= 'sma', lookBack = 365)
+#stockChk('CMG', kpi='macd', lookBack = 365, recommendation='buy')
+
+# HOMEWORK
+# 1. Describe the kpi you entered in a 3 sentence text file.
+
+# I choose to analyze the Simple Moving Average KPI as this methodology “smoothens” the noise of the frequently oscillating stock (with constant gain/loss nearly every day) by finding an average with respect to a defined window of time. 
+
+#The methodology of using the SMA is a comparison of short vs long term stock trends. In this case, the function is using a window of 50 (Purple) and 200 (Blue) Days, which has been set as a standard for comparison in industry today. When we see the 50 Day SMA, a short term SMA, dip below and intersect the 200 Day SMA, a long term SMA, it is an indicator to sell. This phenomena is known as the Death Cross. In reverse, it is known as a Golden Cross and is a trigger to buy.
+
+
+#DEFINITIONS:
+# SMA: Simple Moving Average
+# MACD: Moving Average Convergence/Divergence
+# RSI: Relative Strength Index
+
+# 2. Pick 2 stocks and the kpi you described in #1.  Make a recommendation whether that indicator says to buy or sell and create the dashboard.
+
+stockChk('ACN', kpi = 'sma', lookBack = 365, recommendation = "Monitor Closely for BUY")
+
+#Based on the indicators, it would have been a good time to sell Accenture stocks in mid-December 2018 as nearly after the exact date of the 50 Day SMA crossing and sinking below the 200 Day SMA (Death Cross) the stock crashed by nearly 20% in less than two weeks! While current indicators are not recommending a buy - there has been a rapid upturn for the stock as the 50 Day SMA is nearing the 200 Day SMA on the opposite crossing (Golden Cross), so it is a share that should be closely monitored for a potential BUY fairly soon. The difference between the two is currently only by 2% according to the 50/200 Day SMAs.
+
+stockChk('ATHN', kpi = 'sma', lookBack = 365, recommendation = "HOLD")
+
+#Based on the indicators, it would have been an ideal time to sell athenahealth shares in early October of 2018 when the 50 Day SMA crossed the 200 Day SMA, after of which there followed 5% decrease in value within a week. For now the 200 and 50 SMA indicators recommend holding - the 50 Day SMA is relatively flat overall for the timebeing.
+
+# Question:
+# "Before" working on an Rmd and its HTML files,
+# have you double checked that your R code is error free
+# by executing Ctrl+Alt+R or Cmd+Alt+R in this R script?
+#
+# Answer (Yes or No): Yes
+
+### End: your R code ###
+
+```

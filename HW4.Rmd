@@ -1,0 +1,206 @@
+---
+title: "Homework 4"
+author: "Lee, Jim"
+date: "2019-03-07"
+output: html_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# just to clear the environment
+rm(list=ls())
+```
+
+```{r Instructions, include=FALSE}
+
+## Instructions
+# (0) Complete your R programming in a .R file.
+# (1) Fill in the information for title, author, and date at the top of this file.
+# (2) Copy & paste your entire, error-free R code below.
+# (3) Click the "Knit" button shown above.  This will generate a .HTML file.
+# (4) Submit both .HTML and .Rmd files to Canvas.
+
+## Note
+# Other than (1) and (2), please do NOT make any changes on this .Rmd file.
+
+```
+
+### Solutions
+
+```{r Solutions}
+
+### Start: your R code ###
+
+# Libs
+suppressMessages(library(caret))
+suppressMessages(library(vtreat))
+suppressMessages(library(class))
+suppressMessages(library(dplyr))
+
+# WD
+setwd("/cloud/project/bookDatasets")
+
+# Data
+df <- read.csv("UniversalBank.csv")
+
+# EDA
+table(df$Personal.Loan)
+
+# Drop per directions
+df$ID       <- NULL  
+df$ZIP.Code <- NULL
+
+# In this example EDU is actually a factor!
+df$Education <- as.factor(df$Education)
+nlevels(df$Education)
+
+# Partition per directions
+set.seed(1234)
+splitPercent <- round(nrow(df) %*% 0.6)
+totalRecords <- 1:nrow(df)
+idx <- sample(totalRecords, splitPercent)
+
+trainDat <- df[idx,]
+testDat <- df[-idx,]
+
+# Treatment to account for dummies, although its a pretty clean data set, EDU could be a dummy but is still ordinal...so?
+xVars <- c("Age", "Experience", "Income", "Family", "CCAvg",
+           "Education", "Mortgage", "Securities.Account",
+           "CD.Account", "Online", "CreditCard" )
+yVar <- 'Personal.Loan'
+plan <- designTreatmentsC(trainDat, xVars, yVar, 1)
+
+# Prepare
+treatedTrain <- suppressWarnings(prepare(plan, df))
+
+# Fit - WARNING!!!  
+knnFit <- train(Personal.Loan ~ ., 
+                data = treatedTrain, method = "knn", 
+                preProcess = c("center","scale"), tuneLength = 10)
+
+# Make sure you know your data problem...its classification!  Note the difference with the previous call.
+knnFit <- train(as.factor(Personal.Loan) ~ ., 
+                data = treatedTrain, method = "knn", 
+                preProcess = c("center","scale"), tuneLength = 10)
+
+# 7.2A
+newCustomer <- data.frame(Age                = 40,
+                          Experience         = 10,
+                          Income             = 84,
+                          Family             = 2,
+                          CCAvg              = 2, 
+                          Education          = 2,
+                          Mortgage           = 0, 
+                          Securities.Account = 0,
+                          CD.Account         = 0, 
+                          Online             = 1,
+                          CreditCard         = 1)
+
+newCustomer$Education <- as.factor(newCustomer$Education)
+treatedNewCU          <- suppressWarnings(prepare(plan, newCustomer))
+
+# this is the version with a higher K
+predict(knnFit, treatedNewCU)
+
+# Since 7.2a demands k=1, we make a single model bc caret's implementation starts at 5.
+allData    <- full_join(df, newCustomer)
+treatedAll <- suppressWarnings(prepare(plan, allData))
+scaleAll   <- scale(treatedAll[,1:15], scale = T, center=T)
+
+specialK   <- knn(train = scaleAll[1:5000,1:15],
+                  test  = scaleAll[5001,1:15],
+                  cl = as.factor(df$Personal.Loan), k =1)
+specialK
+
+# Did the person accept the personal loan offer?
+# Answer: According to the exercise, the person will not accept the personal loan offer if k=1. This also agrees with our prediction using caret!
+
+# 7.2B
+knnFit
+plot(knnFit)
+# The most balanced K is:
+# Answer: The most balanced k falls at k=5 according to caret and an observation of our graph.
+
+# 7.2C
+# Prep the validation set
+treatedTest <- suppressWarnings(prepare(plan, testDat))
+testClasses <- predict(knnFit, treatedTest)
+confusionMatrix(as.factor(treatedTest$Personal.Loan),testClasses)
+
+# 7.2D
+# Make another new customer data frame.  Prepare it.  Then use the knnFit to make a prediction.
+newCustomer2 <- data.frame(Age                = 40,
+                          Experience         = 10,
+                          Income             = 84,
+                          Family             = 2,
+                          CCAvg              = 2, 
+                          Education          = 2,
+                          Mortgage           = 0, 
+                          Securities.Account = 0,
+                          CD.Account         = 0, 
+                          Online             = 1,
+                          CreditCard         = 1)
+
+newCustomer2$Education <- as.factor(newCustomer2$Education)
+treatedNewCU2         <- suppressWarnings(prepare(plan, newCustomer2))
+predict(knnFit, treatedNewCU2) 
+
+# Did the person accept the personal loan offer?
+# Answer: No, this customer did not accept the loan offer. Using caret to adjust for a higher k value than in 7.2A (in this case k=5, which was determined to be the most optimal k value), we see the same result.
+
+# 7.2E 
+# Now redo your partitions into 3 parts.  Go back to our script examples for this code.  Make predictions, construct the confusion matrices and review to answer the question.
+
+# Partition per directions
+set.seed(1234)
+trainPercent <- round(nrow(df) %*% 0.5)
+validationPercent <- round(nrow(df) %*% .3)
+
+# Sample index for training
+trainIdx <- sample(1:nrow(df), trainPercent)
+
+# Identify the rows not in the training set, its the "difference" 
+remainingRows <- setdiff(1:nrow(df), trainIdx)
+
+# Create another sample but limit the row numbers to only those identified as *not* in training to get the validation index
+validationIdx <-sample(remainingRows, validationPercent)
+
+# With the two idx vectors of randomly generated numbers, without any overlap you can put them in the "row" position for indexing. 
+trainSet      <- df[trainIdx, ]
+validationSet <- df[validationIdx, ]
+
+# Here you combine both the index and put that with a minus.  Essentially removing any rows in training, or validation indexing leaving you with the test set.
+testSet <- df[-c(trainIdx, validationIdx), ]
+
+# Treatment to account for dummies, although its a pretty clean data set, EDU could be a dummy but is still ordinal...so?
+plan <- designTreatmentsC(trainSet, xVars, yVar, 1)
+
+# Prepare
+treatedTrain2 <- suppressWarnings(prepare(plan, df))
+knnFit2 <- train(as.factor(Personal.Loan) ~ ., 
+                data = treatedTrain2, method = "knn", 
+                preProcess = c("center","scale"), tuneLength = 10)
+
+# Test Set: Create a Confusion Matrix
+treatedTest2 <- suppressWarnings(prepare(plan, testSet))
+testClasses2 <- predict(knnFit2, treatedTest2)
+confusionMatrix(testClasses2,as.factor(treatedTest2$Personal.Loan))
+
+
+# Validation Set: Create a Confusion Matrix
+treatedValidation <- suppressWarnings(prepare(plan, validationSet))
+validationClasses <- predict(knnFit2, treatedValidation)
+confusionMatrix(validationClasses,as.factor(treatedValidation$Personal.Loan))
+
+# Training Set: Create a Confusion Matrix
+treatedTraining <- suppressWarnings(prepare(plan, trainSet))
+trainingClasses <- predict(knnFit2, treatedTraining)
+confusionMatrix(trainingClasses,as.factor(treatedTraining$Personal.Loan))
+
+# Answer: Comparing the confusion matrices between the Test and Training set, we can see that the predictions are fairly accurate in both datasets - but due to the quantity of entries (and potential neighbor matches) the training set has a higher accuracy (0.97 vs 0.976 )
+# Comparing the confusion matrices between the Test and Validation set, we can see similar differences (0.97 vs 0.9713). This in fact helps us understand the correlation between the number of values in the dataset and the accuracy of the kNN results since Test (20%), Validation (30%) and Training Sets (50%) have increasing respective accuracies
+
+### End: your R code ###
+
+```
