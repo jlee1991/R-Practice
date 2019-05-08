@@ -1,0 +1,244 @@
+#Library
+library(caret)
+library(rpart.plot) #visualizing
+library(plyr)
+library(dplyr)
+library(vtreat)
+library(e1071)
+library(rbokeh)
+library(MLmetrics)
+
+#Set wd
+setwd("/Users/jlee/Documents/GitHub/HarvardSpringStudent2019/cases/National City Bank")
+options(scipen=999)
+
+#Read in the csv files
+#dataDictionary <- read.csv('dataDictionary.csv') #Data Dictionary
+ProspectiveCustomers <- read.csv('ProspectiveCustomers.csv') #New Customer Data
+
+#Supplemental Information
+CurrentCustomerMktgResults <- read.csv('training/CurrentCustomerMktgResults.csv')
+householdAxiomData <- read.csv('training/householdAxiomData.csv')
+householdCreditData <- read.csv('training/householdCreditData.csv')
+householdVehicleData <- read.csv('training/householdVehicleData.csv')
+
+#Prediction Set
+ProspectiveList <- ProspectiveCustomers %>% 
+  left_join(householdAxiomData, by = "HHuniqueID") %>% 
+  left_join(householdCreditData, by = "HHuniqueID") %>% 
+  left_join(householdVehicleData, by = "HHuniqueID")
+
+#Combine the Customer Base
+previousMarketingResults <- CurrentCustomerMktgResults %>% 
+  left_join(householdAxiomData, by = "HHuniqueID") %>% 
+  left_join(householdCreditData, by = "HHuniqueID") %>% 
+  left_join(householdVehicleData, by = "HHuniqueID")
+
+previousMarketingResults$Y_AccetpedOffer <- as.factor(previousMarketingResults$Y_AccetpedOffer)
+
+#######
+##EDA##
+#######
+
+#29 Variables (including dependant variable)
+#"dataID" and "HHuniqueID" are NOT useful for prediction (internal IDs)
+#"CallStart" and "CallEnd" are NOT available in the Prospective Customer file
+#We can use 24 dependant variables
+
+#Communication - No correlation? 50/50 split for both cell vs telephone
+table(previousMarketingResults$Communication,previousMarketingResults$Y_AccetpedOffer)
+
+#LastContactDay - Certain days have higher probability of success?
+table(previousMarketingResults$LastContactDay,previousMarketingResults$Y_AccetpedOffer)
+
+#LastContactMonth - Certain months have higher activity
+table(previousMarketingResults$LastContactMonth,previousMarketingResults$Y_AccetpedOffer)
+
+#NoOfContacts - Negative correlation?
+table(previousMarketingResults$NoOfContacts,previousMarketingResults$Y_AccetpedOffer)
+
+#DaysPassed - Mostly blank, not useful?
+table(previousMarketingResults$DaysPassed,previousMarketingResults$Y_AccetpedOffer)
+
+#PrevAttempts - Negative correlation?
+table(previousMarketingResults$PrevAttempts,previousMarketingResults$Y_AccetpedOffer)
+
+#Outcome - Positive correlation
+table(previousMarketingResults$Outcome,previousMarketingResults$Y_AccetpedOffer)
+
+#headOfhouseholdGender - Similar results based on gender
+table(previousMarketingResults$headOfhouseholdGender,previousMarketingResults$Y_AccetpedOffer)
+
+#annualDonations - Hard to see from this point of view... Bucketing by $100s would be better
+table(as.numeric(gsub("\\$", "", previousMarketingResults$annualDonations)),previousMarketingResults$Y_AccetpedOffer)
+
+#EstRace - Some races more inclined to accept a loan - but fairly sparse in general and same with the Prospective Data
+table(previousMarketingResults$EstRace,previousMarketingResults$Y_AccetpedOffer)
+
+#PetsPurchases - No Correlation (roughly the same)
+table(previousMarketingResults$PetsPurchases,previousMarketingResults$Y_AccetpedOffer)
+
+#DigitalHabits_5_AlwaysOn - Slight negative correlation 42% -> 39% as always on increases
+table(previousMarketingResults$DigitalHabits_5_AlwaysOn,previousMarketingResults$Y_AccetpedOffer)
+
+#AffluencePurchases - No Correlation
+table(previousMarketingResults$AffluencePurchases,previousMarketingResults$Y_AccetpedOffer)
+
+#Age - Bell Curve? Some ages do seem to play a higher correlation
+table(previousMarketingResults$Age,previousMarketingResults$Y_AccetpedOffer)
+
+#Job - Some occupations are higher than others
+table(previousMarketingResults$Job,previousMarketingResults$Y_AccetpedOffer)
+
+#Marital - Married people more often take loans
+table(previousMarketingResults$Marital,previousMarketingResults$Y_AccetpedOffer)
+
+#Education - Tertiary more 50/50
+table(previousMarketingResults$Education,previousMarketingResults$Y_AccetpedOffer)
+
+#DefaultOnRecord - Defaulted far less likely to take loans
+table(previousMarketingResults$DefaultOnRecord,previousMarketingResults$Y_AccetpedOffer)
+
+#RecentBalance - Hard to tell from this point of view
+table(previousMarketingResults$RecentBalance,previousMarketingResults$Y_AccetpedOffer)
+
+#HHInsurance - Strong impact
+table(previousMarketingResults$HHInsurance,previousMarketingResults$Y_AccetpedOffer)
+
+#CarLoan - Strong Impact
+table(previousMarketingResults$CarLoan,previousMarketingResults$Y_AccetpedOffer)
+
+#carMake - Some models are more common than others
+table(previousMarketingResults$carMake,previousMarketingResults$Y_AccetpedOffer)
+
+#carModel - Similar to above, but less cases per event...
+table(previousMarketingResults$carModel,previousMarketingResults$Y_AccetpedOffer)
+
+#carYr - Similar to the above
+table(previousMarketingResults$carYr,previousMarketingResults$Y_AccetpedOffer)
+
+#With the EDA above, I would like to remove a few variables from consideration:
+# 1) Communication 2) DaysPassed 3) headOfhouseholdGender 4) PetsPurchases 5) AffluencePurchases
+
+############
+##Analysis##
+############
+
+#Define Variables for vtreat
+informativeVars <- c("LastContactDay", "LastContactMonth", "NoOfContacts", 
+                     "PrevAttempts", "Outcome", "annualDonations","EstRace", 
+                     "DigitalHabits_5_AlwaysOn", "Age", "Job", "Marital", "Education", 
+                     "DefaultOnRecord", "RecentBalance", "HHInsurance", "CarLoan", 
+                     "carMake", "carModel", "carYr")
+y1Target        <- "Y_AccetpedOffer"
+y1Success       <- 1
+
+#Apply vtreat
+plan <- designTreatmentsC(previousMarketingResults,
+                          informativeVars,
+                          y1Target,
+                          y1Success)
+treatedData <- prepare(plan, previousMarketingResults)
+
+#Create Training and Test Datasets
+set.seed(1234)
+splitPercent <- round(nrow(treatedData) %*% .8)
+totalRecords <- 1:nrow(treatedData)
+idx <- sample(totalRecords, splitPercent)
+trainDat <- treatedData[idx,]
+testDat  <- treatedData[-idx,]
+
+#Create a decision tree
+fit <- train(Y_AccetpedOffer ~. , #formula based
+             data = trainDat, #data in
+             #caret does "recursive partitioning (trees)
+             method = "rpart", 
+             #Define a range for the CP to test
+             tuneGrid = data.frame(cp = c(0.1, 0.01, 0.05, 0.07)), 
+             #ie don't split if there are less than 1 record left and only do a split if there are at least 2+ records
+             control = rpart.control(minsplit = 1, minbucket = 2))
+sum(complete.cases(trainDat))
+plot(fit)
+
+# Plot a pruned tree
+prp(fit$finalModel, extra = 1)
+
+# Make some predictions on the training set
+trainCaret<-predict(fit, trainDat)
+confusionMatrix(trainCaret, trainDat$Y_AccetpedOffer)
+
+# Make some predictions on the test set, the Accuracy is 74.5%
+testCaret<-predict(fit,testDat)
+confusionMatrix(testCaret,testDat$Y_AccetpedOffer)
+
+# Save the model
+pth<-'carDecisionTree.rds'
+saveRDS(fit, pth)
+
+#Communication + 
+#LastContactDay +
+  #LastContactMonth +
+  #NoOfContacts + 
+  #DaysPassed + 
+  #PrevAttempts + 
+  #Outcome + 
+  #headOfhouseholdGender + 
+  #annualDonations + 
+  #EstRace + #Maybe remove?
+  #PetsPurchases +
+  #DigitalHabits_5_AlwaysOn + #Maybe remove?
+  #AffluencePurchases + 
+  #Age + 
+  #Job + 
+  #Marital + 
+  #Education + 
+  #DefaultOnRecord +
+  #RecentBalance + 
+  #HHInsurance + 
+  #CarLoan + 
+  #carMake +
+  #carModel + 
+  #carYr
+
+#############################
+##Evaluate Prospective List##
+#############################
+
+treatedTrain <- trainDat
+treatedTest <- testDat
+treatedNew <- prepare(plan, ProspectiveList)
+
+#Create a 10 fold approach and aggregate the result of each "fold" partition
+crtl <- trainControl(method = "cv", 
+                     number = 10,
+                     verboseIter = TRUE)
+
+finalFit <- train(as.factor(Y_AccetpedOffer) ~ ., 
+                  data = treatedTrain, 
+                  method="rpart", 
+                  cp = 0.01,
+                  trControl = crtl)
+finalFit
+
+# We can use a cutoff value of 0.75 to determine who is likely to accept
+originalProbs <- predict(finalFit, treatedTest, type = 'prob')
+cutoffProbs   <- ifelse(originalProbs[,2]>=0.75,1,0) 
+table(cutoffProbs, treatedTest$Y_AccetpedOffer)
+
+#Final Accuracy with a Decision Tree is 68.75%
+Accuracy(treatedTest$Y_AccetpedOffer, cutoffProbs)
+
+# Analyze Prospective Customers
+newProbs <- predict(finalFit, treatedNew, type = 'prob')
+head(newProbs)
+table(ifelse(newProbs[,2]>=0.75,1,0))
+
+# Organize data
+scoredProspects <- data.frame(id           = 1:nrow(treatedNew),
+                          risk         = newProbs[,1],
+                          successProb  = newProbs[,2],
+                          HHuniqueID  = ProspectiveList$HHuniqueID)
+
+# Sort  by highest probability and examine
+scoredProspects<-scoredProspects[order(scoredProspects$successProb,decreasing = TRUE),]
+head(scoredProspects, 100)
