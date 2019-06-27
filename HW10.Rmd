@@ -1,0 +1,220 @@
+---
+title: "Homework 10"
+author: "Lee, Jim"
+date: "2019-04-23"
+output: html_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# just to clear the environment
+rm(list=ls())
+```
+
+```{r Instructions, include=FALSE}
+
+## Instructions
+# (0) Complete your R programming in a .R file.
+# (1) Fill in the information for title, author, and date at the top of this file.
+# (2) Copy & paste your entire, error-free R code below.
+# (3) Click the "Knit" button shown above.  This will generate a .HTML file.
+# (4) Submit both .HTML and .Rmd files to Canvas.
+
+## Note
+# Other than (1) and (2), please do NOT make any changes on this .Rmd file.
+
+```
+
+### Solutions
+
+```{r Solutions}
+
+### Start: your R code ###
+
+#' Title: Text Mining Homework
+#' Purpose: Identify what reviews associate with good and bad reviews
+#' Author: Ted Kwartler
+#' email: ehk116@gmail.com
+#' License: GPL>=3
+#' Date: 2018-11-24
+#' Instructions:
+#' Fill in the rest of the script, and answer the questions inline.  Then upload to canvas.
+
+# Set the working directory
+setwd("/cloud/project/lessons/11_Apr17_TextMining/wk11_homework/")
+
+# Libs
+library(tm) #tm package 
+library(qdap)
+library(wordcloud) # package for wordclouds
+library(RColorBrewer)
+library(tidytext) # for those not able to load qdap
+library(dplyr) # for those not able to load qdap
+
+# Options & Functions
+options(stringsAsFactors = FALSE)
+Sys.setlocale('LC_ALL','C')
+
+tryTolower <- function(x){
+  y = NA
+  try_error = tryCatch(tolower(x), error = function(e) e)
+  if (!inherits(try_error, 'error'))
+    y = tolower(x)
+  return(y)
+}
+
+cleanCorpus<-function(corpus){
+  corpus <- tm_map(corpus, content_transformer(qdapRegex::rm_url))
+  print('removed urls')
+  corpus <- tm_map(corpus, content_transformer(replace_contraction)) #new: isn't to is not
+  print('replace contractions')
+  corpus <- tm_map(corpus, removePunctuation)
+  print('remove punctuation')
+  corpus <- tm_map(corpus, stripWhitespace)
+  print('stip whitespace')
+  corpus <- tm_map(corpus, removeNumbers)
+  print('remove numbers')
+  corpus <- tm_map(corpus, content_transformer(tryTolower))
+  print('making lowercase')
+  corpus <- tm_map(corpus, removeWords, customStopwords)
+  print('DONE!')
+  return(corpus)
+}
+
+# Get your data
+text <- read.csv("sampledAirBnB_Boston.csv")
+
+# 1. How many comments are there BEFORE the sample?
+sum(text$comments != "")
+# Answer: 4310 (after removing blanks)
+
+
+# Get a sample of 1000 to speed up time
+set.seed(1234)
+idx <- sample (1:nrow(text),1000)
+text <- text[idx, ]
+
+# Examine
+dim(text)
+text$comments[1]
+
+# Define custom stopwords, add "apartment" and "boston" to the list
+customStopwords <- c(stopwords('english'), 'place', 'apartment', 'boston')
+
+# Make the VECTOR of text called $comments into a volatile corpus 
+txtCorpus <- VCorpus(VectorSource(text$comments))
+
+# Apply the cleaning function to the volatile corpus; takes a moment!!
+txtCorpus <- cleanCorpus(txtCorpus)
+
+# Make a Document Term Matrix 
+txtDTM <- DocumentTermMatrix(txtCorpus)
+
+# 2. How many terms are in this DTM?
+# Answer: 5668
+
+# Convert TDM to a simple matrix; takes a moment
+txtDTMm <- as.matrix(txtDTM)
+
+# Get column Sums and sort decreasing =TRUE
+txtDTMv <- sort(colSums(txtDTMm),decreasing=TRUE)
+
+# Organize the row sums
+txtDF <- data.frame(word = names(txtDTMv),freq=txtDTMv)
+
+# Examine the first 6 rows
+head(txtDF)
+
+# 3. What is the third most frequent term used in the reviews?
+# Answer: clean
+
+# Choose the "Purples" color & drop light ones in the color palette
+pal <- brewer.pal(8, "Purples")
+pal <- pal[-(1:2)]
+
+# Make a simple word cloud of all terms with 75 words with your palette object
+set.seed(1234)
+png("wordcloud_packages.png", width=12,height=8, units='in', res=300)
+wordcloud(txtDF$word,txtDF$freq, max.words=75, random.order=FALSE, colors=pal)
+dev.off()
+
+# 4. Overall, are comments using positive or negative terms frequently?  Be sure to expand your plots pane to ensure most words are shown
+# Answer: The comments are mostly associated with postive terms (e.g. great, clean, nice, comfortable). Some words like location, stay and room are neutral without context but overall there are not really any negative words.
+
+# Now that you have examined the entire corpus, time to split it based on polarity(); this take a while!
+polarityScores <- polarity(text$comments)
+polarityScores
+
+# 5. What is the average polarity score for the comments?
+# Answer: 0.883
+
+# Using each document's polarity score segregate the comments into positive and negative corpora
+justScores    <- polarityScores$all$polarity # just the polarity values
+documentClass <- ifelse(justScores>0,TRUE,FALSE) # change to binary
+documentClass[is.na(documentClass)] <- 0 # clean up any NA values
+table(documentClass)
+
+# 6. What is the number of positive reviews versus negative reviews?
+# Answer: There are 70 negative reviews and 930 positive reviews (93% of all reviews are positive)
+
+# Now you can subset the original documents by their positive or negative nature and transpose them to TDM
+posReviews <- text$comments[documentClass]
+negReviews <- text$comments[-documentClass]
+
+# Collapse them into a single corpus for each class
+posReviews <- paste(posReviews, collapse = ' ')
+negReviews <- paste(negReviews, collapse = ' ')
+
+# Declare each as a volatile corpus from a vector source
+posReviews <- VCorpus(VectorSource(posReviews))
+negReviews <- VCorpus(VectorSource(negReviews))
+
+# Clean each of the corpora; takes awhile
+posReviews<-cleanCorpus(posReviews)
+negReviews<-cleanCorpus(negReviews)
+
+# Collapse the cleaned segregated corpora
+posReviews <- paste(posReviews, collapse = " ")
+negReviews <- paste(negReviews, collapse = " ")
+
+# Make a combined corpus of pos/neg
+allReviews <- c(posReviews, negReviews)
+
+# Now combine into a VCorpus, using a VectorSource
+allReviewsCorpus <- VCorpus(VectorSource(allReviews))
+allReviewsCorpus
+
+# 7. How many documents are in this corpus?
+# Answer: Two
+
+# Make TDM and change to a simple matrix
+allReviewsTDM <- TermDocumentMatrix(allReviewsCorpus)
+allReviewsTDMm <- as.matrix(allReviewsTDM)
+
+# Label the new TDM, remember the order of subjects
+colnames(allReviewsTDMm) = c("Positive", "Negative")
+
+# Make comparison cloud with 75 words, random.order = FALSE, and title.size = 0.5
+set.seed(1234)
+
+#Added due to resolution not allowing me to see all four words 
+png("wordcloud_packages2.png", width=12,height=8, units='in', res=300)
+comparison.cloud(allReviewsTDMm, max.words=75, random.order=FALSE,
+                 title.size=0.5,colors=brewer.pal(ncol(allReviewsTDMm),"Dark2"))
+dev.off()
+
+# 8. Based on this visual (remember its only a sample so may not be accurate).  
+# What are the 4 most frequent terms used in positive reviews?  Does this indicate a host matters?
+# Answer: Host, comfy, great and room are the four most common positive words. Given host is a frequently used term, we can safely assume that the host matters to recieve a positive review.
+
+# Question:
+# "Before" working on an Rmd and its HTML files,
+# have you double checked that your R code is error free
+# by executing Ctrl+Alt+R or Cmd+Alt+R in this R script?
+#
+# Answer (Yes or No): Yes
+
+### End: your R code ###
+
+```
