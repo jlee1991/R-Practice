@@ -1,0 +1,118 @@
+---
+title: "Marketing Analytics Problem Set"
+author: "Lee, Jim"
+date: "2019-04-30"
+output: html_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# just to clear the environment
+rm(list=ls())
+```
+
+### Solutions
+
+```{r Solutions}
+
+### Start: your R code ###
+
+#
+setwd("/cloud/project/")
+
+#Import/Install Libraries
+suppressMessages(library(caret))
+suppressMessages(library(dplyr))
+suppressMessages(library(sqldf))
+suppressMessages(library(lubridate))
+
+#A) Assemble a dataframe with one row per customer and the following columns:
+#* customer_id
+#* gender
+#* most_recent_order_date
+#* order_count (number of orders placed by this customer)
+#Sort the dataframe by customer_id ascending and display the first 10 rows.
+
+orders <- read.csv('screening_exercise_orders_v201810.csv')
+
+#There are a few ways to do this, but as I am familiar with SQL and can use sqldf package in this case
+orders_a <- 
+sqldf("SELECT 
+        customer_id, 
+        gender, 
+        MIN(date) AS most_recent_order_date, 
+        count(customer_id) AS order_count
+      FROM orders
+      GROUP BY customer_id
+      ORDER BY customer_id ASC")
+
+head(orders_a,10)
+
+#B) Plot the count of orders per week for the store.
+
+#Use lubridate to add a week column
+orders_b <- transform(orders, Week = isoweek(date))
+
+#You can create a new dataframe with that info (I like to visualize my data before plotting)
+orders_b <- 
+sqldf("SELECT 
+        week, 
+        count(*) AS freq
+      FROM orders_b 
+      GROUP BY Week")
+
+plot(orders_b$Week,orders_b$freq, type='p', main='Count of Orders Per Week', xlab='Week of Calendar Year', ylab='Frequency')
+
+#C) Compute the mean order value for gender 0 and for gender 1. Do you think the difference is significant?
+
+#Mean Order Value = Revenue / # of Orders
+orders_c <- 
+sqldf("SELECT 
+        gender, 
+        sum(value) / count(*) AS mean_order_value
+      FROM orders
+      GROUP BY gender")
+
+orders_c
+
+#The mean order values are not significantly different between 363.8900 and 350.7084 (3% difference). 
+
+#We can also use a statistical t-test to prove significance between the customers of each gender, which shown below has a p value greater than 0.05 - also indicating that the two genders are not statistically different in Mean Order Value. 
+
+#Note: The results are slightly different as you compare the results of the Mean Order Value of each customer of each gender, but overall it supports my conclusion
+
+orders_1 <- sqldf("SELECT 
+      customer_id,
+      sum(value) / count(customer_id) AS mean_order_value
+      FROM orders
+      WHERE gender = 1
+      GROUP BY customer_id")
+
+orders_0 <- sqldf("SELECT
+      customer_id,
+      sum(value) / count(customer_id) AS mean_order_value
+      FROM orders
+      WHERE gender = 0
+      GROUP BY customer_id")
+
+t.test(orders_1$mean_order_value,orders_0$mean_order_value)
+
+#D) Assuming a single gender prediction was made for each customer, generate a confusion matrix for predicted gender. What does the confusion matrix tell you about the quality of the predictions?
+
+#Convert gender columns to factors so that they can be compared
+orders$gender <- as.factor(orders$gender)
+orders$predicted_gender <- as.factor(orders$predicted_gender)
+
+#Generate a Confusion Matrix
+confusionMatrix(orders$gender,orders$predicted_gender)
+
+#The accuracy of the prediction is 63.8% and there is much room to create a better model (e.g. using different modeling technique like Decision Tree, Random Forest or Logistical Regression), refine the current model (e.g. eliminate certain unrelated variables) or find more factors to make a better set of predictions for gender. With a 63.8% accuracy, the current predicted set has a lot of error. 
+
+#E) Describe one of your favorite tools or techniques and give a small example of how it's helped you solve a problem. Limit your answer to one paragraph.
+
+#Professionally, I have a few years of SQL experience and so generally like to rearrange data with that methodology (as I showed above). And so, I would say that has been my favorite tool to utilize, dig or display information. Since a majority of my background comes from healthcare, I've used it to query into Electronic Medical Record (EMR) databases to better understand patient health statistics. When applied at a high level on a Population Health perspective (or the overall health of a patient population at a medical center) I've been able to diagnosis whether a population of patients at a Community Health center is comparitively "healthy" or "unhealthy". Lately, I've also studied and reviewed both my R and Python skills for Data Mining to enhance those skills and the above is a brief description of some of what I have been able to accomplish
+
+### End: your R code ###
+
+```
