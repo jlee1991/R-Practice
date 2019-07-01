@@ -1,29 +1,9 @@
----
-title: "Problem 1"
-author: "Lee, Jim"
-date: "2019-03-31"
-output: html_document
----
-  
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-
-# just to clear the environment
-rm(list=ls())
-```
-
-### Solutions
-
-```{r Solutions}
-
-### Start: your R code ###
-
 #Import/Install Libraries
 install.packages("dplyr")
-suppressMessages(library(dplyr))
+library(dplyr)
 
 #Set working directory - using the online R Studio Cloud
-setwd("/cloud/project/aetion/")
+setwd("/cloud/project/")
 
 #Import files from csv (exported from original Word Exercise)
 prescription <- read.csv("data/prescription.csv")
@@ -69,11 +49,6 @@ new_consultation <- all_dates %>%
 
 #Applies condition 3
 new_consultation <- na.omit(new_consultation)
-new_consultation
 
 #Export the file (if neccessary)
 write.csv(new_consultation, file = "new_consultation.csv")
-
-### End: your R code ###
-
-```
